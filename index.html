@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      * {
+        box-sizing: border-box;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 12px;
+        background-color: #f5f5f7;
+        color: #333;
+      }
+      h2, h3 {
+        margin: 8px 0;
+        color: #111;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      }
+      /* 최근 기록 요약 리스트 스타일 */
+      .record-list {
+        max-height: 260px;
+        overflow-y: auto;
+      }
+      .record-item {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+      }
+      .record-item:last-child {
+        border-bottom: none;
+      }
+      .badge {
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-weight: bold;
+        font-size: 11px;
+      }
+      .bg-type { background: #e8f0fe; color: #1a73e8; }
+      .bg-mismatch { background: #fce8e6; color: #d93025; }
+
+      /* 버튼 선택 그룹 */
+      .btn-group {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .btn-option {
+        flex: 1;
+        padding: 14px 8px;
+        font-size: 15px;
+        font-weight: bold;
+        border: 2px solid #dadce0;
+        border-radius: 8px;
+        background: #fff;
+        color: #5f6368;
+        cursor: pointer;
+        text-align: center;
+      }
+      .btn-option.selected {
+        border-color: #1a73e8;
+        background-color: #e8f0fe;
+        color: #1a73e8;
+      }
+
+      /* 폼 입력 요소 스타일 */
+      .form-group {
+        margin-bottom: 14px;
+      }
+      label {
+        display: block;
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 6px;
+      }
+      input[type="text"], input[type="number"], input[type="datetime-local"] {
+        width: 100%;
+        padding: 14px;
+        font-size: 16px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        outline: none;
+      }
+      input:focus {
+        border-color: #1a73e8;
+      }
+
+      /* 메인 저장 버튼 */
+      .submit-btn {
+        width: 100%;
+        padding: 16px;
+        font-size: 18px;
+        font-weight: bold;
+        color: #fff;
+        background-color: #1a73e8;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        margin-top: 8px;
+      }
+      .submit-btn:disabled {
+        background-color: #9aa0a6;
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- 화면 상단: 이번 달 최근 기록 10개 -->
+    <div class="card">
+      <h3>📊 이번 달 최근 오간 기록 (최신 10건)</h3>
+      <div id="recentRecords" class="record-list">
+        <div style="text-align:center; padding: 20px; color: #777;">데이터를 불러오는 중...</div>
+      </div>
+    </div>
+
+    <!-- 화면 하단: 신규 데이터 입력 폼 -->
+    <div class="card">
+      <h3>📝 재고/매출 등록</h3>
+      <form id="recordForm" onsubmit="handleFormSubmit(event)">
+        
+        <!-- 날짜 및 시간 선택 -->
+        <div class="form-group">
+          <label>기록 일시</label>
+          <input type="datetime-local" id="datetime" required>
+        </div>
+
+        <!-- 거래 유형 선택 버튼 -->
+        <div class="form-group">
+          <label>거래 유형</label>
+          <div class="btn-group">
+            <button type="button" class="btn-option selected" onclick="selectType('매출(출고)', this)">매출</button>
+            <button type="button" class="btn-option" onclick="selectType('재고매입(입고)', this)">매입</button>
+            <button type="button" class="btn-option" onclick="selectType('환불매입(입고)', this)">환불</button>
+          </div>
+          <input type="hidden" id="selectedType" value="매출(출고)">
+        </div>
+
+        <!-- 일련번호 & 별칭 -->
+        <div class="form-group">
+          <label>상품 정보</label>
+          <input type="text" id="serialNumber" placeholder="상품 고유 일련번호 (바코드)" required style="margin-bottom:8px;">
+          <input type="text" id="alias" placeholder="상품 별칭 (모델명)" required>
+        </div>
+
+        <!-- 수량 입력 -->
+        <div class="form-group">
+          <label>수량 (개수)</label>
+          <input type="number" id="quantity" placeholder="수량 입력 (기본 1개)" value="1" min="1" required>
+        </div>
+
+        <!-- 제조단가 & 매출단가 -->
+        <div class="form-group">
+          <label>단가 설정 (원)</label>
+          <div style="display:flex; gap:8px;">
+            <input type="number" id="costPrice" placeholder="제조단가(원가)" required>
+            <input type="number" id="salePrice" placeholder="매출단가" required>
+          </div>
+        </div>
+
+        <!-- 재고 불일치 여부 선택 버튼 -->
+        <div class="form-group">
+          <label>실제 재고 불일치 여부</label>
+          <div class="btn-group">
+            <button type="button" class="btn-option selected" onclick="selectMismatch(0, this)">일치 (0)</button>
+            <button type="button" class="btn-option" onclick="selectMismatch(1, this)">불일치 (1)</button>
+          </div>
+          <input type="hidden" id="selectedMismatch" value="0">
+        </div>
+
+        <button type="submit" id="submitBtn" class="submit-btn">시트에 기록하기</button>
+      </form>
+    </div>
+
+    <script>
+      // 페이지 로드 시 초기화
+      window.onload = function() {
+        setNowDateTime();
+        loadRecentRecords();
+      };
+
+      // 현재 날짜/시간을 datetime-local 포맷으로 기본 세팅
+      function setNowDateTime() {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        document.getElementById('datetime').value = now.toISOString().slice(0, 16);
+      }
+
+      // 거래 유형 버튼 선택
+      function selectType(val, btn) {
+        document.getElementById('selectedType').value = val;
+        const parent = btn.parentElement;
+        parent.querySelectorAll('.btn-option').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      }
+
+      // 재고 불일치 여부 버튼 선택
+      function selectMismatch(val, btn) {
+        document.getElementById('selectedMismatch').value = val;
+        const parent = btn.parentElement;
+        parent.querySelectorAll('.btn-option').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      }
+
+      // 최근 기록 10개 불러오기
+      function loadRecentRecords() {
+        google.script.run
+          .withSuccessHandler(renderRecords)
+          .getRecentRecords();
+      }
+
+      function renderRecords(records) {
+        const container = document.getElementById('recentRecords');
+        if (!records || records.length === 0) {
+          container.innerHTML = '<div style="text-align:center; padding: 20px; color: #777;">이번 달 기록이 없습니다.</div>';
+          return;
+        }
+
+        let html = '';
+        records.forEach(r => {
+          const mismatchBadge = r.mismatch == 1 
+            ? '<span class="badge bg-mismatch">불일치(1)</span>' 
+            : '';
+          
+          // 수량이 1을 초과하는 경우와 1인 경우 분기 처리
+          let priceDisplay = '';
+          const saleP = Number(r.salePrice).toLocaleString();
+          const totalP = Number(r.totalPrice).toLocaleString();
+          
+          if (r.quantity > 1) {
+            priceDisplay = `매출단가: ${saleP원} X 수량: ${r.quantity} = 총 가격: ${totalP}원`;
+          } else {
+            priceDisplay = `매출단가: ${saleP}원`;
+          }
+
+          html += `
+            <div class="record-item">
+              <div>
+                <strong>${r.alias}</strong> <small style="color:#666;">(${r.serialNumber})</small><br>
+                <small style="color:#888;">${r.datetime}</small>
+              </div>
+              <div style="text-align:right;">
+                <span class="badge bg-type">${r.type}</span> ${mismatchBadge}<br>
+                <small style="color:#333; font-weight:bold;">${priceDisplay}</small>
+              </div>
+            </div>
+          `;
+        });
+        container.innerHTML = html;
+      }
+
+      // 폼 제출 처리
+      function handleFormSubmit(e) {
+        e.preventDefault();
+        
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerText = '저장 중...';
+
+        const formData = {
+          datetime: document.getElementById('datetime').value.replace('T', ' '),
+          type: document.getElementById('selectedType').value,
+          serialNumber: document.getElementById('serialNumber').value,
+          alias: document.getElementById('alias').value,
+          quantity: document.getElementById('quantity').value,
+          costPrice: document.getElementById('costPrice').value,
+          salePrice: document.getElementById('salePrice').value,
+          mismatch: document.getElementById('selectedMismatch').value
+        };
+
+        google.script.run
+          .withSuccessHandler(function(res) {
+            alert('성공적으로 저장되었습니다!');
+            // 입력창 일부 초기화 및 데이터 새로고침
+            document.getElementById('serialNumber').value = '';
+            document.getElementById('alias').value = '';
+            document.getElementById('quantity').value = '1';
+            document.getElementById('costPrice').value = '';
+            document.getElementById('salePrice').value = '';
+            submitBtn.disabled = false;
+            submitBtn.innerText = '시트에 기록하기';
+            setNowDateTime();
+            loadRecentRecords();
+          })
+          .saveRecord(formData);
+      }
+    </script>
+  </body>
+</html>
